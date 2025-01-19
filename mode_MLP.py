@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+rng = np.random.default_rng(seed=1)
 """ MLP q(z|x, y) """
 class Encoder(nn.Module):
     def __init__(self, layer_sizes, latent_size,activation):  # layer_sizes=[px, h1, ..., hl]
@@ -11,7 +12,8 @@ class Encoder(nn.Module):
             act_func =  nn.ReLU()
         if activation == "Tanh":
             act_func =  nn.ReLU()
-        if activation == "Sigmoid"
+        if activation == "Sigmoid":
+            act_func =  nn.ReLU()
         self.MLP = nn.Sequential()  # [px+py, h1, ..., hl]
         for i, (in_size, out_size) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
             self.MLP.add_module(
@@ -73,7 +75,7 @@ class CVAE(nn.Module):
     
     def validate(self,pred_y_mean,x,gamma):
         pred_y_mean = pred_y_mean.detach().cpu().numpy()
-        noise = gamma* rng.normal(0, 1, (n,2)) 
+        noise = gamma* rng.normal(0, 1, (len(x),2)) 
         pred_y = pred_y_mean + noise
         x= x.detach().cpu().numpy()
         plt.scatter(pred_y[:,0],pred_y[:,1],c=x)
@@ -90,13 +92,12 @@ class CVAE(nn.Module):
         z = torch.from_numpy(z).type(torch.FloatTensor)
         test_x = test_x.to(device)
         z = z.to(device)
-        sampled_y_mean = vae.decoder(z,test_x).detach().cpu().numpy()
+        sampled_y_mean = self.decoder(z,test_x).detach().cpu().numpy()
         noise = gamma* rng.normal(0,1,(n,2))  
         sampled_y = sampled_y_mean + noise
         plt.scatter(sampled_y[:,0],sampled_y[:,1],c=origin_x)
         plt.show()
         return 
-    
         return
 
 criterion = nn.GaussianNLLLoss(reduction='sum')

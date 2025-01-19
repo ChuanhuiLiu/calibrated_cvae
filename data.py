@@ -3,10 +3,12 @@ import numpy as np
 import pandas as pd
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset,DataLoader
+from PIL import Image
+from sklearn.model_selection import train_test_split
+from sklearn import preprocessing
 
-
-def twomoon(num_of_data,sigma):
-    """sigma control the variance of addition noise(es)"""
+def twomoon(num_of_data,sigma): 
+    """load Twomoon Dataset used in Section 5.1, where sigma is the true variance of addition noise"""
     rng = np.random.default_rng(seed=1)
     es1 = rng.normal(0, sigma, (num_of_data,2)) 
     es2 = rng.normal(0, sigma, (num_of_data,2))
@@ -25,7 +27,7 @@ def twomoon(num_of_data,sigma):
     return xs,ys  # [num_of_data,2],[num_of_data,2] array float32
 
 def simulation(num_of_data,method=1):
-    """ey stdy are the true condtional mean and std"""
+    """load three simulation datasets used in Section 5.2, where ey stdy are the true condtional mean and std"""
     rng = np.random.default_rng(seed=1)
     ys = np.zeros(num_of_data)
     ey = np.zeros(num_of_data)
@@ -58,10 +60,62 @@ def simulation(num_of_data,method=1):
             ys[i] = bs[i]*(-1-xs[i,0]-0.5*xs[i,1]+0.5*ers[i,0])+(1-bs[i])*(1+xs[i,0]+0.5*xs[i,1]+1*ers[i,1])
     return xs, ys, ey, stdy # x,y, epct of y given x, std of y given x
 
+def UCI(file_name,preprocess=True):
+    """load 6 UCI benchmark ML datasets used in Section 5.3"""
+    folderpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Data")
+    file_dic = {"boston":"boston.csv","concrete":"boston.xls","energy":"energy.csv","power":"power.xlsx","wine":"wine_red.csv","yacht":"yacht.csv"}
+    filepath = os.path.join(folderpath,file_dic[file_name])
+    data_y = data_y.to_numpy(dtype="float32")
+    data_x = data_x.to_numpy(dtype="float32")
+    # reading file as pd.dataframe
+    if file_name == "boston":
+        column_names = ["CRIM","ZN","INDUS","CHAS","NOX","RM","AGE","DIS","RAD","TAX","PTRATIO","B","LSTAT","MEDV"]
+        boston = pd.read_csv(filepath,header=None,names=column_names) 
+        data_y = boston["MEDV"] 
+        data_x = boston.drop(columns="MEDV") 
+    elif file_name == "concrete": 
+        column_names = ["Cement","Blast Furnace","Fly Ash","Water","Superplasticizer","Coarse Aggregate","Fine Aggregate","Age","Concrete compressive strength"]
+        concret = pd.read_excel(filepath,names = column_names) 
+        data_y = concret["Concrete compressive strength"]
+        data_x = concret.drop(columns="Concrete compressive strength")
+    elif file_name == "energy":
+        energy = pd.read_csv(filepath,sep="\t",header=0)
+        data_y = energy[["Y1","Y2"]]
+        data_x = energy.drop(["Y1","Y2"], 1)
+    elif file_name == "power":
+        power =pd.read_excel(filepath) 
+        data_y = power["PE"]
+        data_x = power.drop(["PE"],1)
+    elif file_name == "wine":
+        wine_red = pd.read_csv(filepath,sep=';') 
+        data_y = wine_red["quality"]
+        data_x = wine_red.drop(["quality"],1)
+    elif file_name == "yacht":
+        yacht = pd.read_csv(filepath,sep=',')
+        data_y = yacht["Rr"] 
+        data_x =yacht.drop(["Rr"],1)
+    else:
+        raise NotImplementedError("dataset not implemented")
+    num_columns = data_y.shape[1]
+    data_y = data_y.to_numpy(dtype="float32")
+    data_x = data_x.to_numpy(dtype="float32")
+
+    if preprocess == True :
+        pre= preprocessing.StandardScaler().fit(data_x)
+        data_x= pre.transform(data_x)
+        #pre= preprocessing.StandardScaler().fit(data_y.reshape(-1, 1))
+        #data_y= pre.transform(data_y.reshape(-1, 1))
+        x_tr, x_te, y_tr, y_te = train_test_split(data_x,data_y, test_size=0.25, random_state=0)
+        train_x = torch.from_numpy(x_tr).type(torch.FloatTensor)  # float32
+        train_y = torch.from_numpy(y_tr).type(torch.FloatTensor).reshape(len(y_tr),num_columns)
+        test_x = torch.from_numpy(x_te).type(torch.FloatTensor)  # float32
+        test_y = torch.from_numpy(y_te).type(torch.FloatTensor).reshape(len(y_te),num_columns)
+    return train_x,train_y,test_x,test_y
+
 
 def create_celeba_dataset():
-    """Path of CelebA Dataset"""
-    IMAGE_PATH = './img_align_celeba'
+    """Return Torch Dataset class for loading and pre-processing CelebA """
+    IMAGE_PATH = './img_align_celeba'  # Please download it from CelebA website
     CSV_PATH = './list_attr_celeba.csv'
     #df = pd.read_csv(CSV_PATH)
     #labels = df[["image_id","Male","Young","Eyeglasses","Bald","Mustache","Smiling"]].values
@@ -113,9 +167,11 @@ def create_celeba_dataset():
     # next(iter(myDataset)) to obtain training sample
 
 def celeba_loader(batch_size=32,shuffle=False):
+    """Torch DataLoader class for reading mini-batch CelebA """
     return DataLoader(dataset=create_celeba_dataset(),batch_size=batch_size,shuffle=shuffle)
 
 def mnist_loader(batch_size = 100):
+    """Torch DataLoader class for reading mini-batch MINIST"""
     mnist_trainset = datasets.MNIST(root='./data', train=True, transform=transforms.ToTensor(), download=True)  
     mnist_testset = datasets.MNIST(root='./data', train=False, transform=transforms.ToTensor(),download=True)
     train_loader = torch.utils.data.DataLoader(
@@ -142,11 +198,12 @@ def Chop_mnist_upperleft(images): #chop the MNIST images into upper left quadran
         rest = np.append(rest,rest_array)
     indices = torch.tensor(index,dtype=torch.int32)
     rest_indices = torch.tensor(rest,dtype=torch.int32)
-    #select the image based on the indices of upper left position
+    #select the image based on the indices
     imgs_x = torch.index_select(images,1,indices) 
     imgs_y =torch.index_select(images,1,rest_indices)
     return imgs_x,imgs_y #[batch_size,196],[batch_size,588]
-def Chop_mnist_upperlefthalf(images): #chop the MNIST images into upper left quadrant and the rest
+
+def Chop_mnist_upperlefthalf(images): #chop the MNIST images into bottom right quadrant and the rest
     #images = images.reshape([10,784])
     index=np.array([])
     rest =np.array([])
@@ -160,11 +217,12 @@ def Chop_mnist_upperlefthalf(images): #chop the MNIST images into upper left qua
         rest = np.append(rest,rest_array)
     indices = torch.tensor(index,dtype=torch.int32)
     rest_indices = torch.tensor(rest,dtype=torch.int32)
-    #select the image based on the indices of upper left position
+    #select the image based on the indices
     imgs_x = torch.index_select(images,1,indices) 
     imgs_y =torch.index_select(images,1,rest_indices)
     return imgs_x,imgs_y #[batch_size,588],[batch_size,196]
-def Chop_mnist_lefthalf(images): #chop the MNIST images into upper left quadrant and the rest
+
+def Chop_mnist_lefthalf(images): #chop the MNIST images into left and right half
     #images = images.reshape([10,784])
     index=np.array([])
     rest =np.array([])
@@ -175,7 +233,7 @@ def Chop_mnist_lefthalf(images): #chop the MNIST images into upper left quadrant
         rest = np.append(rest,rest_array)
     indices = torch.tensor(index,dtype=torch.int32)
     rest_indices = torch.tensor(rest,dtype=torch.int32)
-    #select the image based on the indices of upper left position
+    #select the image based on the indices
     imgs_x = torch.index_select(images,1,indices) 
     imgs_y =torch.index_select(images,1,rest_indices)
     return imgs_x,imgs_y #[batch_size,392],[batch_size,392]

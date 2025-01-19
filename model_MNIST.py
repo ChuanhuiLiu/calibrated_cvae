@@ -1,3 +1,11 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import matplotlib.pyplot as plt
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+rng = np.random.default_rng(seed=1)
+
 class CVAE(nn.Module):
     def __init__(self, x_dim, h_dim1, h_dim2, z_dim):
         super(CVAE, self).__init__()
